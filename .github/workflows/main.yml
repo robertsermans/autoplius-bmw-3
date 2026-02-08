@@ -3,7 +3,7 @@ name: BMW Autoplius Scraper
 on:
   schedule:
     - cron: '*/30 * * * *'
-  workflow_dispatch:      # Ļauj palaist manuāli
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,8 +20,7 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 pytz
+        run: pip install requests beautifulsoup4 pytz
 
       - name: Run bot
         run: python bot.py
