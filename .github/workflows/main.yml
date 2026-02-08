@@ -2,7 +2,7 @@ name: BMW Autoplius Scraper
 on:
   schedule:
     - cron: '*/30 * * * *'  # Izpildīt ik pēc 30 minūtēm
-  workflow_dispatch:      # Ļauj palaist manuāli
+  workflow_dispatch:      # Ļauj palaist manuāli ar pogu
 
 jobs:
   build:
@@ -10,14 +10,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
+
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 cloudscraper
+
       - name: Run bot
         run: python bot.py
+
       - name: Commit changes
         run: |
           git config --global user.name "github-actions"
