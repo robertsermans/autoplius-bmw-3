@@ -21,10 +21,10 @@ def send_telegram(text):
         print("Telegram timeout")
 
 def is_work_time():
-    # Rīgas laika zona: 09:00 - 23:00
     tz = pytz.timezone('Europe/Riga')
     now = datetime.now(tz)
-    return 9 <= now.hour < 23
+    # Tagad strādās līdz 23:59:59
+    return 9 <= now.hour <= 23
 
 def check_autoplius():
     if not is_work_time():
