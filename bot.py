@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import urllib.parse
 from datetime import datetime
 import pytz
+import re
 
 # --- KONFIGURĀCIJA ---
 TOKEN = "8353649009:AAHZA_uGUHSxmhzCgOkeoPpyAzBH4smYU-o"
@@ -13,63 +14,88 @@ TARGET_URL = "https://lv.autoplius.lt/sludinajumi/lietotas-automasinas?make_id=9
 def send_telegram(text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     params = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
-    requests.get(url, params=params)
+    try:
+        requests.get(url, params=params, timeout=10)
+    except:
+        print("Neizdevās aizsūtīt ziņu uz Telegram")
+
+def is_work_time():
+    tz = pytz.timezone('Europe/Riga')
+    now = datetime.now(tz)
+    return 9 <= now.hour < 23
 
 def check_autoplius():
-    # Ignorējam darba laiku uz šo vienu testu, lai redzētu rezultātu tūlīt
+    # Uzreiz pasakām Telegramam, ka esam dzīvi
+    send_telegram("🚀 <b>Bots sāk meklēšanu!</b>")
+
+    if not is_work_time():
+        send_telegram("😴 Pašlaik ir nakts miers (9:00-23:00). Bots atpūšas.")
+        return
+
     encoded_url = urllib.parse.quote_plus(TARGET_URL)
     api_url = f"https://api.scrapingant.com/v2/general?url={encoded_url}&x-api-key={SCRAPING_ANT_KEY}&browser=true"
 
     try:
-        send_telegram("🔄 Bots sāk darbu un pieslēdzas proxy...")
-        
         response = requests.get(api_url, timeout=60)
-        
         if response.status_code != 200:
-            send_telegram(f"❌ Proxy kļūda! Statuss: {response.status_code}")
+            send_telegram(f"❌ Kļūda savienojumā ar proxy. Statuss: {response.status_code}")
             return
 
-        html_content = response.text
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Meklējam jebkuru sludinājumu elementu (pamēģināsim plašāku klasi)
+        soup = BeautifulSoup(response.text, 'html.parser')
         ads = soup.find_all('a', class_='announcement-item')
         
         if not ads:
-            # Ja neatrod, varbūt klases nosaukums ir cits? Pārbaudām virsrakstus.
-            titles = soup.find_all('div', class_='announcement-title')
-            send_telegram(f"⚠️ Sludinājumi netika atrasti. Atrasti {len(titles)} virsraksti. HTML garums: {len(html_content)}")
-        else:
-            send_telegram(f"✅ Veiksme! Lapā atrasti {len(ads)} sludinājumi. Sāku filtrēšanu...")
+            send_telegram("⚠️ Lapā netika atrasts neviens sludinājums. Pārbaudi URL.")
+            return
 
-        # --- FILTRĒŠANAS DAĻA ---
         try:
             with open("seen_bmw.txt", "r") as f:
                 seen_ads = set(f.read().splitlines())
         except FileNotFoundError:
             seen_ads = set()
 
-        found_count = 0
+        found_new = 0
         for ad in ads:
             ad_url = ad.get('href', '')
-            ad_id = ad_url.split("-")[-1].replace(".html", "") if ad_url else "unknown"
+            if not ad_url: continue
+            ad_id = ad_url.split("-")[-1].replace(".html", "")
 
-            # Ļoti vienkāršots filtrs testam: tikai cena
-            price_elem = ad.find('div', class_='announcement-pricing-info')
-            if price_elem:
-                price_text = price_elem.get_text(strip=True)
-                price = int(''.join(filter(str.isdigit, price_text)))
+            if ad_id not in seen_ads:
+                try:
+                    # Nolasām visu tekstu no sludinājuma rāmja (Dīzelis, Automātiskā utt.)
+                    item_text = ad.get_text(" ", strip=True).lower()
+                    
+                    # 1. Cena
+                    price_raw = ad.find('div', class_='announcement-pricing-info').get_text(strip=True)
+                    price = int(''.join(filter(str.isdigit, price_raw)))
+                    
+                    # 2. Gads (Meklējam 4 ciparus pēc kārtas)
+                    year_match = re.search(r'(\d{4})', item_text)
+                    year = int(year_match.group(1)) if year_match else 0
+
+                    # FILTRI: Cena līdz 7000, Gads no 2011, Dīzelis un Automāts
+                    if price <= 7000 and year >= 2011:
+                        # Pārbaudām atslēgvārdus (arī Lietuviešu valodā, ja nu kas)
+                        is_diesel = any(x in item_text for x in ["dīz", "dyzel"])
+                        is_auto = any(x in item_text for x in ["auto", "autom"])
+
+                        if is_diesel and is_auto:
+                            msg = f"✅ <b>ATRĀDĪTS BMW 3</b>\n📅 Gads: {year}\n💰 Cena: {price}€\n🔗 <a href='{ad_url}'>Atvērt sludinājumu</a>"
+                            send_telegram(msg)
+                            found_new += 1
+                except:
+                    continue
                 
-                if price <= 7000 and ad_id not in seen_ads:
-                    send_telegram(f"🚗 <b>Atrasts variants!</b>\nCena: {price}€\n{ad_url}")
-                    seen_ads.add(ad_id)
-                    found_count += 1
+                seen_ads.add(ad_id)
 
         with open("seen_bmw.txt", "w") as f:
             f.write("\n".join(seen_ads))
+        
+        if found_new == 0:
+            send_telegram(f"🔎 Pārbaude pabeigta. Jaunu variantu (BMW 3, >2011, dīzelis, automāts, <7000€) nav.")
 
     except Exception as e:
-        send_telegram(f"🚨 Kritiska kļūda: {str(e)}")
+        send_telegram(f"🚨 Kļūda: {str(e)}")
 
 if __name__ == "__main__":
     check_autoplius()
