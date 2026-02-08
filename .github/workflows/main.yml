@@ -1,23 +1,28 @@
 name: BMW Autoplius Scraper
+
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Izpildīt ik pēc 30 minūtēm
-  workflow_dispatch:      # Ļauj palaist manuāli ar pogu
+    - cron: '*/30 * * * *'  # Darbojas ik pēc 30 minūtēm
+  workflow_dispatch:      # Atļauj palaist manuāli
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Dodam atļauju rakstīt failus atpakaļ repozitorijā
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 cloudscraper
+        run: |
+          pip install requests beautifulsoup4 cloudscraper
 
       - name: Run bot
         run: python bot.py
@@ -27,5 +32,6 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add seen_bmw.txt
-          git commit -m "Update seen ads" || exit 0
+          # Pievienojam nosacījumu, lai nemestu kļūdu, ja nav ko saglabāt
+          git commit -m "Update seen ads [skip ci]" || exit 0
           git push
