@@ -1,0 +1,27 @@
+name: BMW Autoplius Scraper
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # Izpildīt ik pēc 30 minūtēm
+  workflow_dispatch:      # Ļauj palaist manuāli
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+      - name: Run bot
+        run: python bot.py
+      - name: Commit changes
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add seen_bmw.txt
+          git commit -m "Update seen ads" || exit 0
+          git push
